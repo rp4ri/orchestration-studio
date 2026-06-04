@@ -1,0 +1,30 @@
+{
+  "description": "Orchestration Studio hooks — tag-push guard (verifies an annotated tag points at the intended tip before it leaves the machine) and session-start orchestration context (lists live tmux/rmux worker sessions).",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/detect-orchestration.sh",
+            "timeout": 10,
+            "statusMessage": "Detecting live worker sessions..."
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/tag-push-guard.sh",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  }
+}

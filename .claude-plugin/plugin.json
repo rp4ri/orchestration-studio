@@ -1,0 +1,23 @@
+{
+  "name": "orchestration-studio",
+  "version": "1.0.0",
+  "description": "Multi-agent orchestration toolkit for Claude Code — tmux director/worker patterns, PR bot-review triage, tag-driven multi-platform release trains, partitioned audit swarms, worker failure recovery, and recurring-bug family hunting. Distilled from real production orchestration sessions.",
+  "author": {
+    "name": "rp4ri"
+  },
+  "keywords": [
+    "orchestration",
+    "multi-agent",
+    "tmux",
+    "director",
+    "workers",
+    "pr-review",
+    "bot-triage",
+    "release",
+    "ci-cd",
+    "audit",
+    "swarm",
+    "recovery",
+    "regression"
+  ]
+}
