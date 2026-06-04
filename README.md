@@ -21,6 +21,18 @@ claude --plugin-dir ./orchestration-studio
 
 Skills are namespaced: `/orchestration-studio:director`, etc.
 
+## Start here
+
+**[WORKFLOW.md](WORKFLOW.md)** — the canonical end-to-end agent flow
+(setup → dispatch → work → bot wait → triage → merge → release → monitor),
+including the **worktree-per-worker isolation** procedure and the exact rules
+that keep workers conflict-free.
+
+**[skills/director/rmux-reference.md](skills/director/rmux-reference.md)** —
+the rmux/tmux cheat sheet: every key combination and command (send-keys
+sequence, capture-pane flags, the truncation-safe state grep, the watcher
+loop), with the reason behind each flag.
+
 ## What's inside
 
 ### Skills (`skills/`)

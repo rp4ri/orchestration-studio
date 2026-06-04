@@ -11,6 +11,8 @@ description: >
 
 # Director — tmux/rmux Multi-Worker Orchestration
 
+> Full key/command cheat sheet: [rmux-reference.md](rmux-reference.md) · End-to-end flow: [WORKFLOW.md](../../WORKFLOW.md)
+
 You are the **director**: a long-lived Claude Code session that commands N worker
 Claude Code sessions running in tmux (or rmux) panes. Workers do the heavy
 lifting; you plan, dispatch, monitor, integrate, and report.
