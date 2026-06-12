@@ -67,6 +67,26 @@ consolidation and progress tracking mechanical.
    shared fix, then the architectural decisions that need the USER's call.
 4. Dispatch fixes as normal worker tasks (PRs + triage), one theme per worker.
 
+## Variant: issue-legitimacy pass (verify the backlog against HEAD)
+
+**"Open issue count" is a lie after a big merge wave.** Before dispatching a
+fix wave over an old backlog, run this variant — the target is the issue
+tracker against current HEAD, not the code blind:
+
+1. Partition the open issues across N agents by area.
+2. Each agent, per issue: `gh issue view`, check the code at HEAD, emit
+   `{issue, verdict: FIXED | STILL-VALID | PARTIAL, evidence, fixing_pr?}`.
+3. **Close FIXED with a comment citing the fixing PR** — never close on doubt.
+4. **File what the fresh eyes found**: re-verification reliably surfaces NEW
+   bugs the merge wave introduced (in production: 18 of ~35 issues were
+   stale, AND the pass discovered 4 new issues including a HIGH-severity
+   security gate bypassed by the very work that closed the others).
+5. Output a verdict table — the director plans the fix wave from the REAL
+   remaining backlog.
+
+Skipping this means re-implementing already-fixed issues (wasted waves) and
+missing the regressions; the verification doubles as regression detection.
+
 ## Failure modes during swarm audits
 
 - **Rate-limit cuts**: a worker dying mid-audit looks IDLE. On every idle
