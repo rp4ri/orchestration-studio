@@ -46,6 +46,16 @@ gh api "repos/<owner/repo>/pulls/<N>/comments?per_page=100" --jq '
 4. **Gate the merge**: unanswered == 0 AND `mergeable=MERGEABLE/CLEAN` → merge.
    Anything else → keep triaging or rebase.
 
+   **`unanswered=0` is ambiguous — it also reads "bots haven't commented
+   YET".** A merge-readiness watcher that exits on the first all-zero poll
+   races the bot cycle (real incident: a watcher declared 3 PRs clean 90s
+   after opening; the bot's comment landed minutes later). Make zero mean
+   *triaged*, not *early*:
+   - require `reviews > 0` for the PR (or the full wait window elapsed — the
+     CI-only-PR exception below), AND
+   - require **two consecutive all-zero polls** (minutes apart) before
+     declaring triage complete.
+
 ## Severity heuristics
 
 Bots tag severity (P1/P2, critical/high/medium). Calibration from production:
