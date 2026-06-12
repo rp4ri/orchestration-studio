@@ -45,6 +45,8 @@ loop), with the reason behind each flag.
 | **audit-swarm** | Partitioned multi-agent audits: findings-only mandates, enumerable-inventory framing, uniform severity contract, consolidation into cross-cutting themes, rate-limit/filter recovery during swarms |
 | **worker-recovery** | The failure taxonomy: rate-limit cuts, usage-policy false positives (and the defensive re-framing that passes), false-idle detection, the verify-artifact protocol (idle + missing artifact = incident), context-preservation rules |
 | **bug-family-hunt** | Killing recurring bugs: git archaeology of previous fixes, instance enumeration, one shared resolver, the two-test rule (literal regression + anti-recurrence source-scan guard), sibling sweeps from a confirmed root cause |
+| **consolidate** | Merging N CLEAN PRs through one integration branch: combined-state CI as the real gate, conflict→exclude-and-report, and the "`Closes #N` doesn't fire via an aux branch" sweep |
+| **spec-discipline** | Diagnosis discipline: falsifiable-hypothesis specs (never conclusions), mandatory phase-0 data audit for state bugs, the two-shipped-fixes stop-rule with canonical-repro release gates, and the premise-challenger role against "CLEAN theater" |
 
 ### Agents (`agents/`)
 
@@ -58,6 +60,8 @@ loop), with the reason behind each flag.
 | Hook | Event | What it does |
 |---|---|---|
 | `tag-push-guard.sh` | PreToolUse(Bash) | When a `git push` carries a tag, warns if the tag's commit isn't contained in any remote-tracking branch — catches the stale-tag-ships-old-code incident before it happens |
+| `leak-guard.sh` | PreToolUse(Bash) | Before a `git push`/release upload, scans the OUTGOING commits' added lines for secrets and infra identifiers — including **bare** public IPs (not just `ip:port`), instance ids, internal hostnames, private-key blocks, `.env`/`.pem` additions. Secret scanners miss identifiers; a too-narrow IP regex once let the real ones through |
+| `symlink-guard.sh` | PreToolUse(Bash) | Before a `git commit`, flags staged symlinks (mode 120000) named `node_modules` or with absolute-path targets — a worker's broad `git add` once shipped them and broke Windows CI while macOS tolerated it |
 | `detect-orchestration.sh` | SessionStart | Injects the live tmux/rmux session/pane map into context, with the "pane titles are stale" reminder |
 
 ## The five laws (if you read nothing else)

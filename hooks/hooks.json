@@ -1,5 +1,5 @@
 {
-  "description": "Orchestration Studio hooks — tag-push guard (verifies an annotated tag points at the intended tip before it leaves the machine) and session-start orchestration context (lists live tmux/rmux worker sessions).",
+  "description": "Orchestration Studio hooks — tag-push guard (annotated tag must point at the intended tip), leak guard (outgoing pushes scanned for secrets + infra identifiers incl. BARE public IPs), symlink guard (no node_modules / absolute-path symlinks in commits), and session-start orchestration context (lists live tmux/rmux worker sessions).",
   "hooks": {
     "SessionStart": [
       {
@@ -21,6 +21,16 @@
           {
             "type": "command",
             "command": "${CLAUDE_PLUGIN_ROOT}/scripts/tag-push-guard.sh",
+            "timeout": 15
+          },
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/leak-guard.sh",
+            "timeout": 20
+          },
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/symlink-guard.sh",
             "timeout": 15
           }
         ]
