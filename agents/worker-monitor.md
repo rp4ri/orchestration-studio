@@ -18,10 +18,17 @@ panes, or modify anything — observation only.
 
 For each pane you are asked about (default: all panes of the workers session):
 
-1. **State**: `tmux capture-pane -p -t <pane> | grep -c 'esc to'` — count > 0
-   means WORKING. Use the truncated prefix `'esc to'` (narrow panes cut
-   "esc to interrupt"). A single 0 is NOT idle — note "idle candidate" unless
-   the caller's debounce already confirmed it.
+1. **State**: two signals, OR'd — capture the pane once, then count
+   (a) `grep -c 'esc to'` (truncated prefix — narrow panes cut "esc to
+   interrupt", and newer CLIs omit the hint entirely mid-work) and (b) the
+   live spinner `grep -cE '… \([0-9]+m? ?[0-9]*s'` (elapsed time in parens,
+   e.g. `Honking… (1m 22s · …)`). Sum > 0 means WORKING. Do NOT match spinner
+   verbs: `✻ Churned for 4m 7s` (note `for`, no parens) is a COMPLETED turn.
+   A single 0 is NOT idle — note "idle candidate" unless the caller's debounce
+   already confirmed it.
+   Also flag a **stranded dispatch**: pane idle but the composer (`❯` line)
+   holds a full mandate — the submit Enter was dropped; the director must
+   re-send Enter.
 2. **Scrollback**: `tmux capture-pane -p -S -80 -t <pane>` and extract:
    - The worker's final report (last coherent block before the prompt line).
    - Failure signatures: `Rate limited`, `Usage Policy`, permission prompts,

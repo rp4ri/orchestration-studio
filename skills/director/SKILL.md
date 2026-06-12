@@ -42,36 +42,75 @@ it caused a real failure:
 
 ```bash
 rmux send-keys -t workers:0.N Escape   # 1. dismiss any overlay ("How is Claude doing?")
-sleep 0.3
-rmux send-keys -t workers:0.N C-u      # 2. clear the input line
-sleep 0.3
-rmux send-keys -t workers:0.N -l "the full prompt as ONE literal string"
 sleep 0.5
+rmux send-keys -t workers:0.N C-u      # 2. clear the input line
+sleep 0.5
+rmux send-keys -t workers:0.N -l "the full prompt as ONE literal string"
+sleep 3                                # long mandates land as a collapsed paste — let the TUI ingest
 rmux send-keys -t workers:0.N Enter    # 3. submit
+sleep 6
+rmux capture-pane -p -t workers:0.N | tail -5   # 4. VERIFY: composer empty + pane WORKING
 ```
 
 Rules:
 - **`-l` (literal) always** — without it, tmux interprets prompt text as key names.
 - **NEVER blind-Enter a pane.** The input line often shows **ghost text** (dim
   autocomplete suggestions or a stale draft). It is NOT user input. Pressing
-  Enter submits whatever is there. Clear with `C-u` first, always.
+  Enter submits whatever is there. Clear with `C-u` first, always. (Production
+  sighting: ghost text once suggested the exact decision the director was about
+  to send — still not input.)
+- **Dispatch is not done until capture-pane proves it.** An Enter racing a
+  multi-kB paste is **silently dropped**: the mandate sits in the composer, the
+  pane reads idle, hours die. After Enter, verify the composer is back to an
+  empty `❯` and a busy indicator is up; if the text is still sitting there,
+  re-send Enter (one retry is normal on panes ≤55 cols — or zoom first with
+  `rmux resize-pane -Z`). Symmetrically, verify the composer is EMPTY before
+  typing, or you ship a hybrid of stale draft + new mandate.
 - Prompts must be **self-contained**: worktree path, branch-from ref, exact
   task, verification commands, and the standing rules (e.g. "NO merges — report
   back"). Workers have no access to your context.
 - To **preserve a worker's context**, never restart its session — re-prompt it
   in place. A worker that built a plan keeps it; a restarted worker starts cold.
 
+## Bootstrapping context-rich workers (session branching)
+
+Cold workers + self-contained mandates is the cheap default. When the task
+needs workers that share deep project context (a long diagnosis, DB access
+patterns, architecture decisions), **fork a template session** instead:
+
+1. Build the context once in a session, or pick the session that already has
+   it. Treat it as the read-only **template**; `/branch` it once yourself so
+   your own director chatter stays out of it.
+2. In each worker pane: `claude -r <template-session-id>`, then immediately
+   send `/branch` — the pane is now on its own fork; the template stays
+   pristine for the next worker.
+3. **Sequential, never parallel**: two panes resuming the same session id at
+   the same time write to the same transcript. Resume → branch → only then
+   move to the next pane.
+
+Trade-off: every fork starts with the template's full context — smarter
+workers, pricier turns. Use for diagnosis-heavy waves; stick to cold workers
+for mechanical ones.
+
 ## Detecting worker state (WORKING vs IDLE)
 
-Claude Code shows `esc to interrupt` while generating. In narrow panes (~60
-cols) the bottom bar truncates, so grep for the **prefix only**:
+Two signals, OR'd — neither is reliable alone:
+
+1. The `esc to interrupt` hint. In narrow panes (~60 cols) the bottom bar
+   truncates, so grep the **prefix only** (`'esc to'`). Newer CLI builds drop
+   this hint entirely in some states while the worker is hard at work.
+2. The live spinner line — `Honking… (1m 22s · ↓ 41.5k tokens)`. Match the
+   **elapsed-time-in-parens shape**, never the verb: completed turns print
+   `✻ Churned for 4m 7s` (note `for`, no parens), and matching verbs marks
+   finished workers busy forever.
 
 ```bash
-busy=$(rmux capture-pane -p -t workers:0.N | grep -c 'esc to')
+pane=$(rmux capture-pane -p -t workers:0.N)
+busy=$(( $(echo "$pane" | grep -c 'esc to') + $(echo "$pane" | grep -cE '… \([0-9]+m? ?[0-9]*s') ))
 # busy>0 → WORKING ; busy=0 → idle candidate
 ```
 
-**Debounce before declaring IDLE**: between tool calls the indicator blips off
+**Debounce before declaring IDLE**: between tool calls both signals blip off
 for a few seconds. Require **6–8 consecutive idle polls at 20s intervals**
 (~2 min) before treating a worker as done.
 
@@ -85,10 +124,14 @@ completion notification re-invoke you:
 
 ```bash
 # run with run_in_background=true
+busy_check() {  # 'esc to' hint + live spinner — see "Detecting worker state"
+  local pane; pane=$(rmux capture-pane -p -t workers:0.$1 2>/dev/null)
+  echo $(( $(echo "$pane" | grep -c 'esc to') + $(echo "$pane" | grep -cE '… \([0-9]+m? ?[0-9]*s') ))
+}
 declare -A ic; ic[0]=0; ic[1]=0
 for i in $(seq 1 250); do
   for p in 0 1; do
-    b=$(rmux capture-pane -p -t workers:0.$p | grep -c 'esc to')
+    b=$(busy_check $p)
     if [ "$b" -gt 0 ]; then ic[$p]=0; else ic[$p]=$((${ic[$p]}+1)); fi
     if [ "${ic[$p]}" -eq 8 ]; then
       echo "🔔 pane$p IDLE"
@@ -121,6 +164,13 @@ report file, the PR, the branch) before treating the task as done — see the
   queues. Use it for addendums, not for new unrelated tasks.
 - Workers report; the **director merges**. Never let workers merge to the
   integration branch — merge order is global knowledge only you have.
+- **Track open obligations per worker** (pending re-validations, promised
+  reviews, unverified claims). Reassigning a worker mid-obligation orphans it —
+  a PR once sat verdict-less for two waves because its worker was redirected.
+  Close or explicitly transfer the obligation before re-tasking.
+- **"Done" requires an artifact.** A completion report without something you
+  can verify (PR, diff, report file, query output, screenshot) is a promise,
+  not a result — measure done against the artifact, not the claim.
 
 ## Integration loop (per wave)
 
@@ -142,3 +192,7 @@ report file, the PR, the branch) before treating the task as done — see the
 | Restarting a worker to "give it a new task" | Lost plan/context it had built |
 | Director does worker-sized tasks inline | Context bloat; you lose the map |
 | Trusting pane titles | They show the session's FIRST prompt forever |
+| Enter racing a long paste, no capture-verify | Mandate stranded in the composer; pane reads idle while "dispatched" work never started |
+| Busy-detection on the `esc to` hint alone | Newer CLIs omit it mid-work → false IDLE on an active worker |
+| Busy-detection on spinner VERBS | `✻ Churned for 4m` is a COMPLETED turn → finished workers read busy forever |
+| Parallel `claude -r` of one template session | Two panes appending to the same transcript |

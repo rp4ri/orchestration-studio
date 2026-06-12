@@ -50,7 +50,15 @@ Rules that make the isolation actually hold:
 ## 1. Dispatch (director → worker)
 
 Exact keys in [skills/director/rmux-reference.md](skills/director/rmux-reference.md).
-Mandates are **self-contained** — workers share zero context with the director:
+**A dispatch is not done until capture-pane proves it**: after Enter, the
+composer must be back to an empty `❯` and the pane WORKING — long mandates
+land as a collapsed paste and an early Enter is silently dropped, stranding
+the prompt in the composer while the pane reads idle. Verify; retry Enter if
+needed.
+
+Mandates are **self-contained** — workers share zero context with the director
+(unless the wave uses context-rich workers forked off a template session via
+`claude -r <template-id>` + `/branch` — see the director skill):
 
 - Context: 1–3 lines (what's confirmed, PR references).
 - Workspace: `En <worktree-path> → git fetch && git switch -c <branch> origin/main`.
@@ -121,7 +129,8 @@ the watcher (assets exist, health endpoint 200, updater manifests intact).
 
 ## 8. Monitor → next wave
 
-Background watchers over panes (`grep -c 'esc to'`, debounced ≥6–8 polls)
+Background watchers over panes (dual-signal busy check: `grep -c 'esc to'` plus
+the elapsed-time spinner `grep -cE '… \([0-9]+m? ?[0-9]*s'`, debounced ≥6–8 polls)
 fire when workers go idle → director reads the pane tail / report file →
 **verifies the artifact exists** (idle + missing artifact = incident, see
 `skills/worker-recovery`) → triages/merges → dispatches the next wave →
