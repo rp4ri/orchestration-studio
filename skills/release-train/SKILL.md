@@ -36,10 +36,50 @@ when you push its tag — zero recurring cost — and never forces a backend
 restart. Keep the **version number aligned with the main train** when the code
 is the same (`app-win-v0.0.81` = same app as `app-v0.0.81`).
 
+## Pre-flight 1: the execution-tier map (merged ≠ live)
+
+In a multi-tier system (cloud relay/gateway + daemon embedded in a desktop
+app + UI), a fix "shipped" to the wrong tier stays broken for the user — a
+real bug survived 2–3 "fixes" because the failing path ran on the **daemon**
+(shipped inside the DMG) while every deploy hit the **relay**. Before
+declaring anything shipped, build the table for the release's diff:
+
+| Changed file | Executes on | Delivered by |
+|---|---|---|
+| `relay-*.ts` / gateway | relay host | relay deploy lane |
+| daemon/server code | each user's daemon | desktop app build AND/OR `git pull` + restart on dev daemons |
+| UI code | client | app build (DMG/web) |
+
+A PR merged to main is **not live** until every touched tier's lane has run
+AND the specific node executing the failing path was updated. Tell the user
+the literal action: "install DMG vX **and** restart the daemon serving
+`<name>`". Never claim "fixed" from a green deploy of the wrong tier.
+
+## Pre-flight 2: schema-coupled releases (deployed ≠ migrated)
+
+The silent-outage trap, hit 3× in one production session: code expecting a
+new DB column ships, the migration never runs, and the feature "vanishes" —
+the data was intact, the handler crashed on the missing column. Guard:
+
+1. **Detect schema-touch**: diff the release range for `**/migrations/*.sql`,
+   `schema.ts`, `drizzle/`. Any hit → the release is **schema-coupled**.
+2. **Mandatory migration lane**: a schema-coupled release MUST deploy the lane
+   that runs migrations. Cutting only the app tag (e.g. desktop) without the
+   migration deploy is a blocked state, not a smaller release.
+3. **Assert the step RAN — never accept silence.** Every observed failure was
+   a silent skip: `DATABASE_URL unset — skipping` (env read from the wrong
+   scope), `psql` choking on a driver-only URL param, a `sed` that left a
+   malformed URL. The post-release watcher greps the deploy log for the
+   POSITIVE marker (`migrations applied`) and fails on
+   `skipping`/`unset`/`ERROR`. A guard that can `exit 0` silently is the trap.
+4. **Idempotent migrations** (`CREATE … IF NOT EXISTS`, `ADD COLUMN IF NOT
+   EXISTS`) so re-running on every deploy is safe.
+
 ## Cutting a release (the safe sequence)
 
 ```bash
-git fetch origin -q
+git fetch origin -q --tags        # --tags: a teammate may have taken the next number
+git tag -l 'app-v*' --sort=-v:refname | head -3   # read the LATEST remote tag — never assume your local count
 TIP=$(git rev-parse origin/main)
 git tag -a app-v0.0.84 "$TIP" -m "app-v0.0.84
 
@@ -53,7 +93,9 @@ TAGC=$(git rev-parse app-v0.0.84^{commit})
 The verify step exists because of a real incident: `git tag -d` failed silently
 (tag didn't exist locally), the subsequent `git tag -a` failed ("already
 exists"), and the push shipped an OLD tag → CI built a commit **without the
-fix**. Always compare tag commit to intended tip before pushing.
+fix**. Always compare tag commit to intended tip before pushing. The
+`--tags` fetch exists because of another: the next version number was already
+tagged remotely on an older commit by a teammate.
 
 ## Re-triggering after a failed build
 
